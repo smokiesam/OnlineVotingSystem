@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0"><channel><title><![CDATA[Spring]]></title><description><![CDATA[Level up your Java code and explore what Spring can do for you.]]></description><link>https://spring.io</link><generator>GatsbyJS</generator><lastBuildDate>Tue, 03 Dec 2024 13:32:39 GMT</lastBuildDate><item><title><![CDATA[Extending Spring Data Repositories Just Got Easier]]></title><link>https://spring.io/blog/2024/12/03/extending-spring-data-repositories-just-got-easier</link><guid isPermaLink="true">https://spring.io/blog/2024/12/03/extending-spring-data-repositories-just-got-easier</guid><dc:creator><![CDATA[christophstrobl]]></dc:creator><pubDate>Tue, 03 Dec 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;Since its inception, Spring Data Repositories have been designed for extension, whether you want to customize a single query method or provide a completely new base implementation.&lt;/p&gt;
+&lt;p&gt;The &lt;a href=&quot;https://github.com/spring-projects/spring-data-commons/wiki/Spring-Data-2024.1-Release-Notes&quot;&gt;2024.1 release&lt;/a&gt; enhances your ability to extend a repository with &lt;a href=&quot;https://docs.spring.io/spring-data/commons/reference/repositories/custom-implementations.html&quot;&gt;custom functionality&lt;/a&gt; making it easier than ever for anyone to create extensions that can be shared across different projects.&lt;/p&gt;
+&lt;p&gt;Let’s explore an example to see how this works in practice.&lt;/p&gt;
+&lt;p&gt;Imagine you are using MongoDB as a document store to manage a movie database. You want to leverage MongoDBs Atlas &lt;a href=&quot;https://www.mongodb.com/docs/atlas/atlas-vector-search/vector-search-stage/&quot;&gt;vector search&lt;/a&gt; functionality through your repository interfaces for AI-powered search operations. Typically, you’d create a custom repository fragment like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-java&quot;&gt;package io.movie.db;
+
+interface AtlasMovieRepository {
+   List&amp;#x3C;Movie&gt; vectorSearch(String index, String path, List&amp;#x3C;Double&gt; vector, Limit limit);
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here, since you&apos;re working with the &lt;code&gt;Movie&lt;/code&gt; type, you already know the collection. The index parameter specifies the vector index to use, and path defines the field holding the &lt;a href=&quot;https://www.mongodb.com/docs/atlas/atlas-vector-search/create-embeddings/&quot;&gt;vector embeddings&lt;/a&gt; for comparison. The similarity function (e.g., euclidean, cosine, or dotProduct) is determined when you set up the index. Let’s assume a cosine vector index is already in place.&lt;/p&gt;
+&lt;p&gt;In your fragment implementation, you will need to create the &lt;code&gt;$vectorSearch&lt;/code&gt; aggregation stage, MongoDB&apos;s approach to running vector searches, and integrate it into the Aggregation API using &lt;code&gt;MongoOperations&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-java&quot;&gt;package io.movie.db;
+
+class AtlasMovieRepositoryFragment implements AtlasMovieRepository {
+
+   private final MongoOperations mongoOperations;
+
+   public AtlasMovieRepositoryFragment(MongoOperations mongoOperations) {
+       this.mongoOperations = mongoOperations;
+   }
+
+   @Override
+   public List&amp;#x3C;Movie&gt; vectorSearch(String index, String path, List&amp;#x3C;Double&gt; vector, Limit limit) {
+       Document $vectorSearch = createSearchDocument(index, path, vector, limit);
+       Aggregation aggregation = Aggregation.newAggregation(ctx -&gt; $vectorSearch);
+       return mongoOperations.aggregate(aggregation, &quot;movies&quot;, Movie.class).getMappedResults();
+   }
+
+   private static Document createSearchDocument(String index, String path, List&amp;#x3C;Double&gt; vector, Limit limit) {
+       Document $vectorSearch = new Document();
+       $vectorSearch.append(&quot;index&quot;, index);
+       $vectorSearch.append(&quot;path&quot;, path);
+       $vectorSearch.append(&quot;queryVector&quot;, vector);
+       $vectorSearch.append(&quot;limit&quot;, limit.max());
+
+       return new Document(&quot;$vectorSearch&quot;, $vectorSearch);
+   }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Now, simply integrate the fragment into your &lt;code&gt;MovieRepository&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-java&quot;&gt;package io.movie.db;
+
+interface MovieRepository extends CrudRepository&amp;#x3C;Movie, String&gt;, AtlasMovieRepository { }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;While this approach works, you might notice that it is tightly coupled to a single repository with a specific domain type (&lt;code&gt;Movie&lt;/code&gt;). This makes it difficult to reuse in other projects, as the fragment implementations are tied to the repository’s package and are domain-specific.&lt;/p&gt;
+&lt;p&gt;But vector search isn&apos;t limited to just our Movie database. What if we want to reuse this functionality in other projects without copying and modifying the solution? Let’s explore a way to make this more generic.&lt;/p&gt;
+&lt;h3 id=&quot;making-it-reusable&quot; style=&quot;position:relative;&quot;&gt;&lt;a href=&quot;#making-it-reusable&quot; aria-label=&quot;making it reusable permalink&quot; class=&quot;anchor before&quot;&gt;&lt;svg aria-hidden=&quot;true&quot; focusable=&quot;false&quot; height=&quot;16&quot; version=&quot;1.1&quot; viewBox=&quot;0 0 16 16&quot; width=&quot;16&quot;&gt;&lt;path fill-rule=&quot;evenodd&quot; d=&quot;M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z&quot;&gt;&lt;/path&gt;&lt;/svg&gt;&lt;/a&gt;Making It Reusable&lt;/h3&gt;
+&lt;p&gt;To enable reuse, we move the &lt;code&gt;AtlasMovieRepository&lt;/code&gt; and its implementation to a separate project so that it can be shared. Then, we register the fragment within the &lt;code&gt;META-INF/spring.factories&lt;/code&gt; file, so that Spring Data knows about the extension:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-properties&quot;&gt;api.mongodb.atlas.AtlasMovieRepository=api.mongodb.atlas.AtlasMovieRepositoryFragment
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;However, the current implementation is still tied to the &lt;code&gt;Movie&lt;/code&gt; type, limiting its reusability. To fix this, we need to make the fragment more generic. Rename &lt;code&gt;AtlasMovieRepository&lt;/code&gt; to &lt;code&gt;AtlasRepository&lt;/code&gt; and introduce a generic type parameter. Don’t forget to update the &lt;code&gt;spring.factories&lt;/code&gt; file as well.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;package api.mongodb.atlas;
+
+interface AtlasRepository&amp;#x3C;T&gt; {
+   List&amp;#x3C;T&gt; vectorSearch(String index, String path, List&amp;#x3C;Double&gt; vector, Limit limit);
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Next, we update the implementation to reflect the new generic approach, as we can no longer assume we&apos;re targeting the &lt;code&gt;Movie&lt;/code&gt; collection. Using the newly introduced &lt;code&gt;RepositoryMethodContext&lt;/code&gt;, we can access repository metadata and determine the appropriate collection name dynamically:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-java&quot;&gt;package api.mongodb.atlas;
+
+class AtlasRepositoryFragment&amp;#x3C;T&gt; implements AtlasRepository&amp;#x3C;T&gt;, RepositoryMetadataAccess {
+
+   private MongoOperations mongoOperations;
+
+   public AtlasRepositoryFragment(@Autowired MongoOperations mongoOperations) {
+       this.mongoOperations = mongoOperations;
+   }
+
+   @Override
+   public List&amp;#x3C;T&gt; vectorSearch(String index, String path, List&amp;#x3C;Double&gt; vector, Limit limit) {
+       RepositoryMethodContext methodContext = RepositoryMethodContext.getContext();
+
+       Class&amp;#x3C;?&gt; domainType = methodContext.getMetadata().getDomainType();
+
+       Document $vectorSearch = createSearchDocument(index, path, vector, limit);
+       Aggregation aggregation = Aggregation.newAggregation(ctx -&gt; $vectorSearch);
+       return (List&amp;#x3C;T&gt;) mongoOperations.aggregate(aggregation, mongoOperations.getCollectionName(domainType), domainType).getMappedResults();
+   }
+
+   private static Document createSearchDocument(String indexName, String path, List&amp;#x3C;Double&gt; vector, Limit limit) {
+       Document $vectorSearch = new Document();
+       //…
+   }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The provided method context not only allows you to access general information about the repository, but also gives you access to the repositories&apos; generics, methods etc. In the above snippet we assume that the repository domain type aligns with our custom fragment, which must not be the case. So instead we could also read the component type of the interface via &lt;code&gt;ResolvableType.forClass(getRepositoryInterface()).as(AtlasRepository.class).getGeneric(0)&lt;/code&gt; or even check the current methods return type to apply additional manipulation like projections and the such. For simplicity let’s stick with the domain type in this sample.&lt;/p&gt;
+&lt;p&gt;To avoid unnecessary overhead, we only enable context access for repositories that need it.
+Looking carefully at the code above you will see that there is an extra &lt;code&gt;RepositoryMetadataAccess&lt;/code&gt; interface on the &lt;code&gt;AtlasRepositoryFragment&lt;/code&gt; class. This marker interfaces advises the infrastructure to provide the required metadata on method invocation.&lt;/p&gt;
+&lt;p&gt;With that setup, you can now use the custom extension in any project by simply extending your repository:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&quot;language-java&quot;&gt;package io.movie.db;
+
+interface MovieRepository extends CrudRepository&amp;#x3C;Movie, String&gt;, AtlasRepository&amp;#x3C;Movie&gt; { }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;To try it out, visit the &lt;a href=&quot;https://github.com/spring-projects/spring-data-examples/tree/main/mongodb/fragment-spi&quot;&gt;Spring Data Examples&lt;/a&gt; project, where you’ll find the code ready to run.&lt;/p&gt;</content:encoded></item><item><title><![CDATA[This Week in Spring - December 3rd, 2024]]></title><link>https://spring.io/blog/2024/12/03/this-week-in-spring-december-3rd-2024</link><guid isPermaLink="true">https://spring.io/blog/2024/12/03/this-week-in-spring-december-3rd-2024</guid><dc:creator><![CDATA[joshlong]]></dc:creator><pubDate>Tue, 03 Dec 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;Hi, Spring fans! Welcome to another installment of &lt;em&gt;This Week in Spring&lt;/em&gt;! It&apos;s the first week of December and I am in the amazing city of Perth, Australia. Perth, for those of you who don&apos;t know, is amazing. And well worth the journey. But it is &lt;em&gt;quite&lt;/em&gt; the journey! 27 hours, door-to-door, from San Francisco to Perth! Insanity.&lt;/p&gt;
+&lt;p&gt;I&apos;m super happy to be here, though, talking to amazing folks before I begin my journey from Melbourne, Brisbane, and Sydney, Australia for the epic YOW! conference. It&apos;s going to be a ton of fun.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;I love this InfoQ interview &lt;a href=&quot;https://www.infoq.com/news/2024/11/spring-6-2-spring-boot-3-4/&quot;&gt;with Spring Framework lead Jürgen Hoeller and Spring Framework contributor Sébastien Deleuze&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;I also love this article on &lt;a href=&quot;https://www.infoq.com/articles/reactive-notification-system-server-sent-events/&quot;&gt;reactive websockets with Spring&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Extending &lt;a href=&quot;https://spring.io/blog/2024/12/03/extending-spring-data-repositories-just-got-easier&quot;&gt;Spring Data repositories just got easier!&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Huh. Apparently the old SpringSource repositories &lt;a href=&quot;https://spring.io/blog/2024/12/02/repository-springsource-com-sunset&quot;&gt;just got sunsetted. I had no idea we still maintained them.&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;In this week&apos;s installment of &lt;a href=&quot;https://spring.io/blog/2024/11/28/a-bootiful-podcast-dave-cramer&quot;&gt;&lt;em&gt;A Bootiful Podcast&lt;/em&gt;, I talk to Dave Cramer, PostgreSQL and PostgreSQL JDBC driver contributor extraordinairre&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://spring.io/blog/2024/11/27/spring-cloud-2023-0-4&quot;&gt;Spring Cloud 2023.0.4 is now available&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://spring.io/blog/2024/11/27/spring-cloud-stream-applications-2022-0-1-ga-release-now-available&quot;&gt;Spring Cloud Stream Applications is now available&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://spring.io/blog/2024/11/26/http3-in-reactor-2024&quot;&gt;HTTP3 in Reactor!&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</content:encoded></item><item><title><![CDATA[Sunset notice: repository.springsource.com]]></title><link>https://spring.io/blog/2024/12/02/repository-springsource-com-sunset</link><guid isPermaLink="true">https://spring.io/blog/2024/12/02/repository-springsource-com-sunset</guid><dc:creator><![CDATA[trevormarshall]]></dc:creator><pubDate>Mon, 02 Dec 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;Dear Spring Community,&lt;/p&gt;
+&lt;p&gt;This post serves to announce the sunset of two legacy public repositories dating all the way back to SpringSource and early VMware days. Both have been well out of support for over a decade now.&lt;/p&gt;
+&lt;p&gt;&lt;em&gt;repository.springsource.com&lt;/em&gt; and &lt;em&gt;spring-roo-repository.springsource.org&lt;/em&gt; will be closed permanently on &lt;em&gt;January 6, 2025&lt;/em&gt; and removed from DNS, as we retire these domains.&lt;/p&gt;
+&lt;p&gt;If you still need something from either then you should grab it while you can, and maybe reflect on why.&lt;/p&gt;</content:encoded></item><item><title><![CDATA[A Bootiful Podcast: PostgreSQL contributor Dave Cramer]]></title><link>https://spring.io/blog/2024/11/28/a-bootiful-podcast-dave-cramer</link><guid isPermaLink="true">https://spring.io/blog/2024/11/28/a-bootiful-podcast-dave-cramer</guid><dc:creator><![CDATA[joshlong]]></dc:creator><pubDate>Thu, 28 Nov 2024 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;Hi, Spring fans! Happy Thanksgiving to my American listeners! and happy Thursday to the everyone! In today&apos;s episode I talk to PostgreSQL and PostgreSQL JDBC contributor Dave Cramer. #postgresql #jdbc #sql #java&lt;/p&gt;
+&lt;iframe title=&quot;PostgreSQL contributor Dave Cramer&quot; allowtransparency=&quot;true&quot; height=&quot;150&quot; width=&quot;100%&quot; style=&quot;border: none; min-width: min(100%, 430px);height:150px;&quot; scrolling=&quot;no&quot; data-name=&quot;pb-iframe-player&quot; src=&quot;https://www.podbean.com/player-v2/?i=7fp2h-17543fe-pb&amp;from=pb6admin&amp;share=1&amp;download=1&amp;rtl=0&amp;fonts=Arial&amp;skin=1&amp;font-color=&amp;logo_link=episode_page&amp;btn-skin=7&quot; loading=&quot;lazy&quot;&gt;&lt;/iframe&gt;</content:encoded></item></channel></rss>

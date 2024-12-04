@@ -1,0 +1,5 @@
+package com.sunbeam.utils;
+
+public class DbUtil {
+
+}

@@ -1,0 +1,7 @@
+package com.sunbeam.servlets;
+
+import javax.servlet.http.HttpServlet;
+
+public class ResultServlet extends HttpServlet{
+
+}
