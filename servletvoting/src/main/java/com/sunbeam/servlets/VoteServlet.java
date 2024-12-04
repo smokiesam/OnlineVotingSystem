@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 
 import javax.servlet.http.Cookie;
+import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -38,7 +39,14 @@ public class VoteServlet extends HttpServlet{
 		out.println("<head>");
 		out.println("<title>Result</title>");
 		out.println("</head>");
-		out.println("<body>");
+		
+		ServletContext bg = this.getServletContext();
+		String bgColor = bg.getInitParameter("bg.color");
+		out.printf("<body bgcolor='%s'>",bgColor);
+		
+		ServletContext app = this.getServletContext();
+		String appTitle = app.getInitParameter("app.title");
+		out.printf("<h1>%s</h1>", appTitle);
 		
 		// get user name and role from cookie and display it
 				Cookie[] arr = req.getCookies();

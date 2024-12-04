@@ -5,6 +5,7 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.Cookie;
@@ -42,7 +43,14 @@ public class CandidateListServlet extends HttpServlet {
 		out.println("<head>");
 		out.println("<title>Candidate List</title>");
 		out.println("</head>");
-		out.println("<body>");
+		ServletContext bg = this.getServletContext();
+		String bgColor = bg.getInitParameter("bg.color");
+		out.printf("<body bgcolor='%s'>",bgColor);
+		
+		ServletContext app = this.getServletContext();
+		String appTitle = app.getInitParameter("app.title");
+		out.printf("<h1>%s</h1>", appTitle);
+		
 		// get user name and role from cookie and display it
 		Cookie[] arr = req.getCookies();
 		String userName = "", role = "";
@@ -55,6 +63,11 @@ public class CandidateListServlet extends HttpServlet {
 			}
 		}
 		out.printf("Hello, %s (%s)<hr/>\n", userName, role);
+		
+		ServletContext ctx = this.getServletContext();
+		String ann = (String) ctx.getAttribute("announcement");
+		if(ann != null)
+			out.println("<p style='color:red'> NOTE: " + ann + "</p>");
 		
 		out.println("<h2>Candidate List</h2>");
 		out.println("<form method='post' action='vote'>");

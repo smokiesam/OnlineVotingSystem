@@ -2,8 +2,10 @@ package com.sunbeam.servlets;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.rmi.ServerException;
 
 import javax.servlet.RequestDispatcher;
+import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -28,13 +30,22 @@ public class EditCandidateServlet extends HttpServlet {
 		out.println("<head>");
 		out.println("<title>Edit</title>");
 		out.println("</head>");
-		out.println("<body>");
+		
+		ServletContext bg = this.getServletContext();
+		String bgColor = bg.getInitParameter("bg.color");
+		out.printf("<body bgcolor='%s'>",bgColor);
+
+		// get app title from ctx param and display it
+		ServletContext app = this.getServletContext();
+		String appTitle = app.getInitParameter("app.title");
+		out.printf("<h1>%s</h1>", appTitle);
+		
 		out.println("<h2>Edit Candidate</h2>");
 		try(CandidateDao candDao = new CandidateDaoImpl()) {
 			Candidate c = candDao.findById(id);
 			if(c != null) {
 				out.println("<form method='post' action='editcand'>");
-				out.printf("Id: <input type='hidden' name='id' value='%d' readonly><br/>\n", c.getId());
+				out.printf("<input type='hidden' name='id' value='%d'><br/>\n", c.getId());
 				out.printf("Name: <input type='text' name='name' value='%s'><br/>\n", c.getName());
 				out.printf("Party: <input type='text' name='party' value='%s'><br/>\n", c.getParty());
 				out.printf("Votes: <input type='text' name='votes' value='%d' readonly><br/><br/>\n", c.getVotes());
@@ -62,14 +73,21 @@ public class EditCandidateServlet extends HttpServlet {
 		try(CandidateDao candDao = new CandidateDaoImpl()) {
 			int count = candDao.update(c);
 			String message = "Candidates updated: " + count;
+			req.setAttribute("msg", message);
 		}
 		catch (Exception e) {
 			e.printStackTrace();
 			throw new ServletException(e);
 		}
 		// forward req to result page
-		RequestDispatcher rd = req.getRequestDispatcher("result");
+		//RequestDispatcher rd = req.getRequestDispatcher("result");
+		ServletContext ctx = this.getServletContext();
+		RequestDispatcher rd = ctx.getRequestDispatcher("/result");
 		rd.forward(req, resp);
+		/*
+		RequestDispatcher can be created using request as well as servlet context.
+		If it is created using req, it can be used to forward req to any page w.r.t. current req.
+		If it is created using servlet context, it can be used to forward req to any page in whole appln. 
+		*/
 	}
-	
 }

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.servlet.http.Cookie;
+import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -42,7 +43,13 @@ public class ResultServlet extends HttpServlet{
 			out.println("<head>");
 			out.println("<title>Result</title>");
 			out.println("</head>");
-			out.println("<body>");
+			ServletContext bg = this.getServletContext();
+			String bgColor = bg.getInitParameter("bg.color");
+			out.printf("<body bgcolor='%s'>",bgColor);
+			
+			ServletContext app = this.getServletContext();
+			String appTitle = app.getInitParameter("app.title");
+			out.printf("<h1>%s</h1>", appTitle);
 			
 			Cookie[] arr = req.getCookies();
 			String userName = "",role="";
@@ -58,6 +65,11 @@ public class ResultServlet extends HttpServlet{
 				
 				out.printf("Hello, %s (%s)<hr/>\n",userName,role);
 			}
+			
+			ServletContext ctx = this.getServletContext();
+			String ann = (String) ctx.getAttribute("announcement");
+			if(ann != null)
+				out.println("<p style='color:red'> NOTE: " + ann + "</p>");
 			
 			out.println("<h2>Voting Result</h2>");
 			out.println("<table border='1'>");
@@ -84,7 +96,10 @@ public class ResultServlet extends HttpServlet{
 			}
 			out.println("</tbody");
 			out.println("</table>");
-			out.println("<p><a href='logout'>Logout</a></p>");
+			String message = (String) req.getAttribute("msg");
+			if(message != null)
+				out.println("<p>" + message + "</p>");
+			out.println("<p><a href='announcement.html'>Announcement</a> | <a href='logout'>Logout</a></p>");
 			out.println("</body>");
 			out.println("</html>");
 	}
