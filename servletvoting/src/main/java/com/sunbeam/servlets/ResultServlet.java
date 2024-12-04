@@ -76,7 +76,10 @@ public class ResultServlet extends HttpServlet{
 				out.printf("<td>%s</td>\n", c.getName());
 				out.printf("<td>%s</td>\n", c.getParty());
 				out.printf("<td>%d</td>\n", c.getVotes());
-				out.println("<td></td>\n");
+				out.printf("<td>\n");
+				out.printf("<a href='editcand?id=%d'><img src='images/edit.png' alt='Edit' width='24' height='24'/></a>\n", c.getId());
+				out.printf("<a href='delcand?id=%d'><img src='images/delete.png' alt='Delete' width='24' height='24'/></a>\n", c.getId());
+				out.printf("<td>\n");
 				out.println("</tr>");
 			}
 			out.println("</tbody");

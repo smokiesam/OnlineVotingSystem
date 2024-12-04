@@ -9,9 +9,13 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
 import com.sunbeam.daos.CandidateDao;
 import com.sunbeam.daos.CandidateDaoImpl;
+import com.sunbeam.daos.UserDao;
+import com.sunbeam.daos.UserDaoImpl;
+import com.sunbeam.entities.User;
 
 @WebServlet("/vote")
 public class VoteServlet extends HttpServlet{
@@ -51,18 +55,38 @@ public class VoteServlet extends HttpServlet{
 		
 		out.println("<h2>Voting Status</h2>");
 		
-		try(CandidateDao candDao = new CandidateDaoImpl()){
-			int count = candDao.incrVote(id);
-			if(count==1) {
-				out.println("<h4>You have successfully casted your vote</h4>");	
-			}else {
-				out.println("<h4>Your voting failed.</h4>");
-			}
-		}catch(Exception e){
-			e.printStackTrace();
-			throw new ServletException(e);
+		HttpSession session = req.getSession(false);
+		if(session==null) {
+			//if session timeout/expire,send msg or redirect to login
+			//resp.Redirect("index.html");
+			resp.sendError(440); 	//session expired error
+			return;
 		}
-		
+		User user = (User)session.getAttribute("currUser");
+		if(user.getStatus() == 0) {
+			
+			try(CandidateDao candDao = new CandidateDaoImpl()){
+				int count = candDao.incrVote(id);
+				if(count==1) {
+					out.println("<h4>You have successfully casted your vote</h4>");
+					//updating status in db
+					user.setStatus(1);	
+					try(UserDao userDao = new UserDaoImpl()){
+							count = userDao.update(user);
+							if(count==1) {
+								out.println("<h4>You are already marked as voted.</h4>");
+							}
+					}
+				}else {
+					out.println("<h4>Your voting failed.</h4>");
+				}
+			}catch(Exception e){
+				e.printStackTrace();
+				throw new ServletException(e);
+			}	
+		}else {
+			out.println("<h4>You have already voted.</h4>");
+		}
 		out.println("<p><a href='logout'>Sign Out</a></p>");
 		out.println("</body>");
 		out.println("</html>");
