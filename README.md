@@ -1,2 +1,2 @@
 # OnlineVotingSystem
-An online voting system using advance java.
+An Online Voting System using Advance Java Servlets.
